@@ -470,6 +470,12 @@ if ($officer_id) {
                     <i class="fas fa-balance-scale mr-2"></i>
                     Benchmarking
                 </a>
+                
+                <a href="officer_general_performance.php?year=<?php echo $selected_year; ?>" 
+                   class="flex items-center justify-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    <i class="fas fa-chart-pie mr-2"></i>
+                    General Performance
+                </a>
             </div>
         </div>
     </div>

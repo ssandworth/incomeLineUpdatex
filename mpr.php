@@ -413,6 +413,14 @@ for ($week = 1; $week <= 5; $week++) {
                     </svg>
                     Recommendations
                 </a>
+                
+                <a href="officer_general_performance.php?year=<?php echo $selected_year; ?>" 
+                   class="flex items-center justify-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                    Officer Performance
+                </a>
             </div>
         </div>
 
