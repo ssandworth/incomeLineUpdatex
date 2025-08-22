@@ -1,6 +1,5 @@
 <?php
-require_once 'Database.php';
-
+// require_once 'Database.php';
 class PaymentProcessor {
     private $db;
     
@@ -75,8 +74,8 @@ class PaymentProcessor {
             'amount_posted' => $posted['amount_posted'],
             'amount_remitted' => $remitted['amount_remitted'],
             'unposted' => $remitted['amount_remitted'] - $posted['amount_posted'],
-            'remit_id' => $remitted['remit_id'] ?? '',
-            'date' => $remitted['date'] ?? ''
+            'remit_id' => isset($remitted['remit_id']) ? $remitted['remit_id'] : '',
+            'date' => isset($remitted['date']) ? $remitted['date'] : ''
         ];
     }
     
