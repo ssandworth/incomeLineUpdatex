@@ -1,5 +1,6 @@
 <?php
 require_once 'Database.php';
+require_once 'OfficerTargetManager.php';
 require_once 'config.php';
 require_once 'functions.php';
 
@@ -15,16 +16,19 @@ $staff = [
 
 class GeneralPerformanceAnalyzer {
     private $db;
+    private $target_manager;
     
     public function __construct() {
         $this->db = new Database();
+        $this->target_manager = new OfficerTargetManager();
     }
     
     /**
-     * Get officer overall performance across all months
+     * Get officer overall performance with target comparison
      */
-    public function getOfficerOverallPerformance($year = null) {
+    public function getOfficerOverallPerformance($year = null, $month = null) {
         $year = $year ?? date('Y');
+        $month_condition = $month ? "AND MONTH(t.date_of_payment) = :month" : "";
         
         $this->db->query("
             SELECT 
@@ -32,7 +36,7 @@ class GeneralPerformanceAnalyzer {
                 s.full_name,
                 s.department,
                 s.phone,
-                COUNT(DISTINCT CONCAT(YEAR(t.date_of_payment), '-', MONTH(t.date_of_payment))) as active_months,
+                " . ($month ? "1" : "COUNT(DISTINCT CONCAT(YEAR(t.date_of_payment), '-', MONTH(t.date_of_payment)))") . " as active_months,
                 COUNT(DISTINCT t.date_of_payment) as total_working_days,
                 COUNT(t.id) as total_transactions,
                 SUM(t.amount_paid) as total_collections,
@@ -42,6 +46,7 @@ class GeneralPerformanceAnalyzer {
             FROM staffs s
             LEFT JOIN account_general_transaction_new t ON s.user_id = t.remitting_id
                 AND YEAR(t.date_of_payment) = :year
+                {$month_condition}
                 AND (t.approval_status = 'Approved' OR t.approval_status = '')
             WHERE s.department = 'Wealth Creation'
             GROUP BY s.user_id, s.full_name, s.department, s.phone
@@ -49,16 +54,58 @@ class GeneralPerformanceAnalyzer {
         ");
         
         $this->db->bind(':year', $year);
+        if ($month) {
+            $this->db->bind(':month', $month);
+        }
         $officers = $this->db->resultSet();
         
         // Calculate additional metrics
         foreach ($officers as &$officer) {
-            $officer['months_in_year'] = 12;
-            $officer['activity_rate'] = ($officer['active_months'] / 12) * 100;
+            $officer['months_in_year'] = $month ? 1 : 12;
+            $officer['activity_rate'] = ($officer['active_months'] / $officer['months_in_year']) * 100;
             $officer['daily_average'] = $officer['total_working_days'] > 0 ? 
                 $officer['total_collections'] / $officer['total_working_days'] : 0;
             $officer['monthly_average'] = $officer['active_months'] > 0 ? 
                 $officer['total_collections'] / $officer['active_months'] : 0;
+            
+            // Get target data and calculate achievement
+            if ($month) {
+                $target_summary = $this->target_manager->getOfficerPerformanceSummary(
+                    $officer['user_id'], $month, $year
+                );
+                
+                $officer['total_target'] = $target_summary['total_target'] ?? 0;
+                $officer['achievement_percentage'] = $target_summary['avg_achievement_percentage'] ?? 0;
+                $officer['performance_score'] = $target_summary['avg_performance_score'] ?? 0;
+                $officer['target_variance'] = $officer['total_collections'] - $officer['total_target'];
+                
+                // Calculate performance grade
+                if ($officer['achievement_percentage'] >= 150) {
+                    $officer['performance_grade'] = 'A+';
+                    $officer['grade_class'] = 'bg-green-100 text-green-800';
+                } elseif ($officer['achievement_percentage'] >= 120) {
+                    $officer['performance_grade'] = 'A';
+                    $officer['grade_class'] = 'bg-green-100 text-green-800';
+                } elseif ($officer['achievement_percentage'] >= 100) {
+                    $officer['performance_grade'] = 'B+';
+                    $officer['grade_class'] = 'bg-blue-100 text-blue-800';
+                } elseif ($officer['achievement_percentage'] >= 80) {
+                    $officer['performance_grade'] = 'B';
+                    $officer['grade_class'] = 'bg-blue-100 text-blue-800';
+                } elseif ($officer['achievement_percentage'] >= 60) {
+                    $officer['performance_grade'] = 'C+';
+                    $officer['grade_class'] = 'bg-yellow-100 text-yellow-800';
+                } elseif ($officer['achievement_percentage'] >= 40) {
+                    $officer['performance_grade'] = 'C';
+                    $officer['grade_class'] = 'bg-yellow-100 text-yellow-800';
+                } elseif ($officer['achievement_percentage'] >= 20) {
+                    $officer['performance_grade'] = 'D';
+                    $officer['grade_class'] = 'bg-orange-100 text-orange-800';
+                } else {
+                    $officer['performance_grade'] = 'F';
+                    $officer['grade_class'] = 'bg-red-100 text-red-800';
+                }
+            }
         }
         
         return $officers;
@@ -247,12 +294,13 @@ $analyzer = new GeneralPerformanceAnalyzer();
 
 // Get parameters
 $selected_year = $_GET['year'] ?? date('Y');
+$selected_month = $_GET['month'] ?? null;
 $selected_officer = $_GET['officer_id'] ?? null;
 $page = $_GET['page'] ?? 1;
 $per_page = 20;
 
 // Get data
-$officers_ranking = $analyzer->getOfficerRanking($selected_year);
+$officers_ranking = $analyzer->getOfficerOverallPerformance($selected_year, $selected_month);
 $department_stats = $analyzer->getDepartmentStatistics($selected_year);
 
 // Pagination
@@ -332,12 +380,24 @@ if ($selected_officer) {
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
                     <div class="mb-4 lg:mb-0">
                         <h2 class="text-2xl font-bold text-gray-900">Annual Performance Overview</h2>
-                        <p class="text-gray-600">Comprehensive performance analysis for <?php echo $selected_year; ?></p>
+                        <p class="text-gray-600">
+                            <?php echo $selected_month ? 'Monthly' : 'Annual'; ?> performance analysis for 
+                            <?php echo $selected_month ? date('F', mktime(0, 0, 0, $selected_month, 1)) . ' ' : ''; ?><?php echo $selected_year; ?>
+                        </p>
                     </div>
                     
-                    <!-- Year Selection Form -->
+                    <!-- Period Selection Form -->
                     <form method="GET" class="flex flex-col sm:flex-row gap-4">
                         <input type="hidden" name="officer_id" value="<?php echo $selected_officer; ?>">
+                        
+                        <select name="month" class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">All Months</option>
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?php echo $m; ?>" <?php echo $m == $selected_month ? 'selected' : ''; ?>>
+                                    <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
                         
                         <select name="year" class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                             <?php for ($y = date('Y') - 3; $y <= date('Y'); $y++): ?>
@@ -349,7 +409,7 @@ if ($selected_officer) {
                         
                         <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                             <i class="fas fa-search mr-2"></i>
-                            Load Year
+                            Load Period
                         </button>
                     </form>
                 </div>
@@ -544,7 +604,10 @@ if ($selected_officer) {
         <div class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Officer Performance Ranking - <?php echo $selected_year; ?></h3>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        Officer Performance Ranking - 
+                        <?php echo $selected_month ? date('F', mktime(0, 0, 0, $selected_month, 1)) . ' ' : ''; ?><?php echo $selected_year; ?>
+                    </h3>
                     <div class="text-sm text-gray-500">
                         Showing <?php echo $offset + 1; ?>-<?php echo min($offset + $per_page, $total_officers); ?> of <?php echo $total_officers; ?> officers
                     </div>
@@ -558,11 +621,16 @@ if ($selected_officer) {
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Officer</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collections</th>
+                            <?php if ($selected_month): ?>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Achievement %</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Variance</th>
+                            <?php endif; ?>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Active Months</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Activity Rate</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Average</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Average</th>
-                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Percentile</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
@@ -597,8 +665,34 @@ if ($selected_officer) {
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">
                                 ₦<?php echo number_format($officer['total_collections']); ?>
                             </td>
+                            <?php if ($selected_month): ?>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                ₦<?php echo number_format($officer['total_target']); ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <div class="flex items-center justify-center">
+                                    <div class="w-16 bg-gray-200 rounded-full h-2">
+                                        <div class="<?php echo $officer['achievement_percentage'] >= 100 ? 'bg-green-500' : ($officer['achievement_percentage'] >= 80 ? 'bg-yellow-500' : 'bg-red-500'); ?> h-2 rounded-full" 
+                                             style="width: <?php echo min(100, $officer['achievement_percentage']); ?>%"></div>
+                                    </div>
+                                    <span class="ml-2 text-xs text-gray-500">
+                                        <?php echo number_format($officer['achievement_percentage'], 1); ?>%
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full <?php echo $officer['grade_class']; ?>">
+                                    <?php echo $officer['performance_grade']; ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                <span class="<?php echo $officer['target_variance'] >= 0 ? 'text-green-600' : 'text-red-600'; ?> font-medium">
+                                    <?php echo $officer['target_variance'] >= 0 ? '+' : ''; ?>₦<?php echo number_format($officer['target_variance']); ?>
+                                </span>
+                            </td>
+                            <?php endif; ?>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                                <?php echo $officer['active_months']; ?>/12
+                                <?php echo $officer['active_months']; ?>/<?php echo $officer['months_in_year']; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-center">
                                 <div class="flex items-center justify-center">
@@ -618,20 +712,21 @@ if ($selected_officer) {
                                 ₦<?php echo number_format($officer['daily_average']); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-center">
-                                <span class="px-2 py-1 text-xs font-semibold rounded-full <?php echo $officer['percentile_class']; ?>">
-                                    <?php echo $officer['percentile']; ?>
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-center">
                                 <div class="flex justify-center space-x-2">
-                                    <a href="?officer_id=<?php echo $officer['user_id']; ?>&year=<?php echo $selected_year; ?>&page=<?php echo $page; ?>" 
+                                    <a href="?officer_id=<?php echo $officer['user_id']; ?>&year=<?php echo $selected_year; ?>&month=<?php echo $selected_month; ?>&page=<?php echo $page; ?>" 
                                        class="text-blue-600 hover:text-blue-800" title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    <a href="officer_detailed_report.php?officer_id=<?php echo $officer['user_id']; ?>&month=<?php echo date('n'); ?>&year=<?php echo $selected_year; ?>" 
+                                    <a href="officer_detailed_report.php?officer_id=<?php echo $officer['user_id']; ?>&month=<?php echo $selected_month ?? date('n'); ?>&year=<?php echo $selected_year; ?>" 
                                        class="text-green-600 hover:text-green-800" title="Detailed Report">
                                         <i class="fas fa-chart-line"></i>
                                     </a>
+                                    <?php if ($selected_month): ?>
+                                    <a href="officer_target_management.php?officer_id=<?php echo $officer['user_id']; ?>&month=<?php echo $selected_month; ?>&year=<?php echo $selected_year; ?>" 
+                                       class="text-purple-600 hover:text-purple-800" title="Manage Targets">
+                                        <i class="fas fa-bullseye"></i>
+                                    </a>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -676,17 +771,65 @@ if ($selected_officer) {
 
         <!-- Performance Insights -->
         <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Insights & Recommendations</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                Performance Insights & Recommendations
+                <?php if ($selected_month): ?>
+                    <span class="text-sm font-normal text-gray-600">(Target-based Analysis)</span>
+                <?php endif; ?>
+            </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
                     <h4 class="font-medium text-gray-900 mb-2">Top Performers</h4>
                     <ul class="text-sm text-gray-600 space-y-1">
                         <?php foreach (array_slice($officers_ranking, 0, 3) as $top): ?>
-                            <li>• <?php echo $top['full_name']; ?> - ₦<?php echo number_format($top['total_collections']); ?></li>
+                            <li>• <?php echo $top['full_name']; ?> - ₦<?php echo number_format($top['total_collections']); ?>
+                                <?php if ($selected_month && isset($top['performance_grade'])): ?>
+                                    <span class="ml-2 px-1 py-0.5 text-xs rounded <?php echo $top['grade_class']; ?>">
+                                        <?php echo $top['performance_grade']; ?>
+                                    </span>
+                                <?php endif; ?>
+                            </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>
                 
+                <?php if ($selected_month): ?>
+                <div>
+                    <h4 class="font-medium text-gray-900 mb-2">Target Achievers</h4>
+                    <ul class="text-sm text-gray-600 space-y-1">
+                        <?php 
+                        $achievers = array_filter($officers_ranking, function($o) { 
+                            return isset($o['achievement_percentage']) && $o['achievement_percentage'] >= 100; 
+                        });
+                        ?>
+                        <?php if (!empty($achievers)): ?>
+                            <?php foreach (array_slice($achievers, 0, 3) as $achiever): ?>
+                                <li>• <?php echo $achiever['full_name']; ?> - <?php echo number_format($achiever['achievement_percentage'], 1); ?>%</li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <li>• No officers achieved 100% of targets this month</li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="font-medium text-gray-900 mb-2">Needs Support</h4>
+                    <ul class="text-sm text-gray-600 space-y-1">
+                        <?php 
+                        $needs_support = array_filter($officers_ranking, function($o) { 
+                            return isset($o['achievement_percentage']) && $o['achievement_percentage'] < 60; 
+                        });
+                        ?>
+                        <?php if (!empty($needs_support)): ?>
+                            <?php foreach (array_slice($needs_support, 0, 3) as $support): ?>
+                                <li>• <?php echo $support['full_name']; ?> - <?php echo number_format($support['achievement_percentage'], 1); ?>%</li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <li>• All officers meeting minimum performance standards</li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+                <?php else: ?>
                 <div>
                     <h4 class="font-medium text-gray-900 mb-2">Most Consistent</h4>
                     <ul class="text-sm text-gray-600 space-y-1">
@@ -714,6 +857,37 @@ if ($selected_officer) {
                             <li>• All officers meeting minimum activity standards</li>
                         <?php endif; ?>
                     </ul>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Management Actions -->
+            <div class="mt-6 pt-6 border-t">
+                <h4 class="font-medium text-gray-900 mb-4">Management Actions</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <a href="officer_target_management.php?month=<?php echo $selected_month ?? date('n'); ?>&year=<?php echo $selected_year; ?>" 
+                       class="flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-bullseye mr-2"></i>
+                        Manage Targets
+                    </a>
+                    
+                    <a href="budget_management.php?year=<?php echo $selected_year; ?>" 
+                       class="flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        <i class="fas fa-calculator mr-2"></i>
+                        Budget Management
+                    </a>
+                    
+                    <a href="officer_reward_system.php?month=<?php echo $selected_month ?? date('n'); ?>&year=<?php echo $selected_year; ?>" 
+                       class="flex items-center justify-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                        <i class="fas fa-trophy mr-2"></i>
+                        Reward System
+                    </a>
+                    
+                    <a href="performance_analytics.php?month=<?php echo $selected_month ?? date('n'); ?>&year=<?php echo $selected_year; ?>" 
+                       class="flex items-center justify-center px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                        <i class="fas fa-chart-pie mr-2"></i>
+                        Analytics
+                    </a>
                 </div>
             </div>
         </div>
