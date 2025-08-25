@@ -76,6 +76,10 @@ class OfficerTargetManager {
         $this->db->beginTransaction();
         
         try {
+            // Calculate daily target (excluding Sundays)
+            $working_days = $this->getWorkingDaysInMonth($data['target_month'], $data['target_year']);
+            $daily_target = $working_days > 0 ? $data['monthly_target'] / $working_days : 0;
+            
             // Get officer information
             $this->db->query("SELECT full_name, department FROM staffs WHERE user_id = :officer_id");
             $this->db->bind(':officer_id', $data['officer_id']);
@@ -91,6 +95,7 @@ class OfficerTargetManager {
                 $this->db->query("
                     UPDATE officer_monthly_targets SET
                         monthly_target = :monthly_target,
+                        daily_target = :daily_target,
                         status = :status,
                         updated_by = :updated_by
                     WHERE id = :target_id
@@ -102,12 +107,13 @@ class OfficerTargetManager {
                 $this->db->query("
                     INSERT INTO officer_monthly_targets (
                         officer_id, officer_name, department, target_month, target_year,
-                        acct_id, acct_desc, monthly_target, status, created_by
+                        acct_id, acct_desc, monthly_target, daily_target, status, created_by
                     ) VALUES (
                         :officer_id, :officer_name, :department, :target_month, :target_year,
-                        :acct_id, :acct_desc, :monthly_target, :status, :created_by
+                        :acct_id, :acct_desc, :monthly_target, :daily_target, :status, :created_by
                     ) ON DUPLICATE KEY UPDATE
                         monthly_target = VALUES(monthly_target),
+                        daily_target = VALUES(daily_target),
                         status = VALUES(status),
                         updated_by = :updated_by
                 ");
@@ -123,6 +129,7 @@ class OfficerTargetManager {
             $this->db->bind(':acct_id', $data['acct_id']);
             $this->db->bind(':acct_desc', $account['acct_desc']);
             $this->db->bind(':monthly_target', $data['monthly_target']);
+            $this->db->bind(':daily_target', $daily_target);
             $this->db->bind(':status', $data['status']);
             
             $this->db->execute();
@@ -134,6 +141,23 @@ class OfficerTargetManager {
             $this->db->cancelTransaction();
             return ['success' => false, 'message' => 'Error saving target: ' . $e->getMessage()];
         }
+    }
+    
+    /**
+     * Get working days in month (excluding Sundays)
+     */
+    private function getWorkingDaysInMonth($month, $year) {
+        $total_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+        $working_days = 0;
+        
+        for ($day = 1; $day <= $total_days; $day++) {
+            $day_of_week = date('w', mktime(0, 0, 0, $month, $day, $year));
+            if ($day_of_week != 0) { // 0 = Sunday
+                $working_days++;
+            }
+        }
+        
+        return $working_days;
     }
     
     /**

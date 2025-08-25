@@ -71,6 +71,12 @@ class BudgetManager {
         $this->db->beginTransaction();
         
         try {
+            // Calculate annual budget
+            $annual_budget = $data['january_budget'] + $data['february_budget'] + $data['march_budget'] + 
+                           $data['april_budget'] + $data['may_budget'] + $data['june_budget'] + 
+                           $data['july_budget'] + $data['august_budget'] + $data['september_budget'] + 
+                           $data['october_budget'] + $data['november_budget'] + $data['december_budget'];
+            
             if (isset($data['id']) && $data['id']) {
                 // Update existing budget
                 $this->db->query("
@@ -90,6 +96,7 @@ class BudgetManager {
                         october_budget = :october_budget,
                         november_budget = :november_budget,
                         december_budget = :december_budget,
+                        annual_budget = :annual_budget,
                         status = :status,
                         updated_by = :updated_by
                     WHERE id = :id
@@ -104,12 +111,14 @@ class BudgetManager {
                         january_budget, february_budget, march_budget, april_budget,
                         may_budget, june_budget, july_budget, august_budget,
                         september_budget, october_budget, november_budget, december_budget,
+                        annual_budget, status, created_by
                         status, created_by
                     ) VALUES (
                         :acct_id, :acct_desc, :budget_year,
                         :january_budget, :february_budget, :march_budget, :april_budget,
                         :may_budget, :june_budget, :july_budget, :august_budget,
                         :september_budget, :october_budget, :november_budget, :december_budget,
+                        :annual_budget, :status, :created_by
                         :status, :created_by
                     )
                 ");
@@ -132,6 +141,7 @@ class BudgetManager {
             $this->db->bind(':october_budget', $data['october_budget']);
             $this->db->bind(':november_budget', $data['november_budget']);
             $this->db->bind(':december_budget', $data['december_budget']);
+            $this->db->bind(':annual_budget', $annual_budget);
             $this->db->bind(':status', $data['status']);
             
             $this->db->execute();
