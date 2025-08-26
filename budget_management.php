@@ -1,6 +1,7 @@
 <?php
 require_once 'BudgetManager.php';
 require_once 'config.php';
+require_once 'functions.php';
 
 // Start session
 session_start();
@@ -28,6 +29,7 @@ if (!$can_view) {
 // Handle form submissions
 $message = '';
 $error = '';
+$upload_errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['btn_save_budget']) && ($can_create || $can_edit)) {
@@ -66,6 +68,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = $result['message'];
         } else {
             $error = $result['message'];
+        }
+    }
+    
+    // Handle Excel upload
+    if (isset($_POST['btn_upload_excel']) && $can_create) {
+        if (isset($_FILES['excel_file']) && $_FILES['excel_file']['error'] === UPLOAD_ERR_OK) {
+            $result = $manager->processExcelUpload($_FILES['excel_file'], $staff['user_id']);
+            if ($result['success']) {
+                $message = $result['message'];
+                if (!empty($result['warnings'])) {
+                    $upload_errors = $result['warnings'];
+                }
+            } else {
+                $error = $result['message'];
+                if (!empty($result['errors'])) {
+                    $upload_errors = $result['errors'];
+                }
+            }
+        } else {
+            $error = 'Please select a valid Excel file to upload.';
         }
     }
 }
@@ -160,6 +182,9 @@ $performance_data = $manager->getBudgetPerformance($selected_year);
                             <button onclick="showBudgetForm()" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
                                 <i class="fas fa-plus mr-2"></i>Add Budget
                             </button>
+                            <button onclick="showExcelUpload()" class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
+                                <i class="fas fa-file-excel mr-2"></i>Excel Upload
+                            </button>
                             <?php endif; ?>
                             
                             <form method="POST" class="inline">
@@ -170,6 +195,75 @@ $performance_data = $manager->getBudgetPerformance($selected_year);
                                 </button>
                             </form>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Excel Upload Errors -->
+        <?php if (!empty($upload_errors)): ?>
+        <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+            <h4 class="font-bold mb-2">Upload Warnings/Errors:</h4>
+            <ul class="list-disc list-inside text-sm">
+                <?php foreach ($upload_errors as $upload_error): ?>
+                    <li><?php echo htmlspecialchars($upload_error); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+
+        <!-- Excel Upload Modal -->
+        <div id="excelModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Excel Budget Upload</h3>
+                            <button onclick="hideExcelUpload()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h4 class="font-medium text-blue-900 mb-2">Instructions:</h4>
+                                <ol class="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                                    <li>Download the Excel template below</li>
+                                    <li>Fill in the budget amounts for each income line and month</li>
+                                    <li>Save the file and upload it using the form below</li>
+                                    <li>Review the uploaded data before final submission</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <a href="download_budget_template.php?year=<?php echo $selected_year; ?>" 
+                               class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                                <i class="fas fa-download mr-2"></i>
+                                Download Excel Template
+                            </a>
+                        </div>
+
+                        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Select Excel File</label>
+                                <input type="file" name="excel_file" accept=".xlsx,.xls" required
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <p class="text-xs text-gray-500 mt-1">Supported formats: .xlsx, .xls</p>
+                            </div>
+
+                            <div class="flex justify-end space-x-4 pt-6 border-t">
+                                <button type="button" onclick="hideExcelUpload()" 
+                                        class="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Cancel
+                                </button>
+                                <button type="submit" name="btn_upload_excel"
+                                        class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    <i class="fas fa-upload mr-2"></i>
+                                    Upload Budget
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -422,6 +516,15 @@ $performance_data = $manager->getBudgetPerformance($selected_year);
 
         function hideBudgetForm() {
             document.getElementById('budgetModal').classList.add('hidden');
+        }
+
+        // Show/hide excel upload
+        function showExcelUpload() {
+            document.getElementById('excelModal').classList.remove('hidden');
+        }
+
+        function hideExcelUpload() {
+            document.getElementById('excelModal').classList.add('hidden');
         }
 
         // Update account description when income line is selected

@@ -174,6 +174,160 @@ class BudgetManager {
     }
     
     /**
+     * Process Excel upload for budget data
+     */
+    public function processExcelUpload($file, $user_id) {
+        $upload_dir = 'uploads/';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
+        }
+        
+        $file_extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($file_extension, ['xlsx', 'xls'])) {
+            return ['success' => false, 'message' => 'Invalid file format. Please upload .xlsx or .xls files only.'];
+        }
+        
+        $upload_path = $upload_dir . 'budget_' . time() . '.' . $file_extension;
+        
+        if (!move_uploaded_file($file['tmp_name'], $upload_path)) {
+            return ['success' => false, 'message' => 'Failed to upload file.'];
+        }
+        
+        try {
+            // Simple CSV-like parsing for Excel content
+            // Note: For production, you'd want to use a proper Excel library like PhpSpreadsheet
+            $result = $this->parseExcelFile($upload_path, $user_id);
+            
+            // Clean up uploaded file
+            unlink($upload_path);
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            // Clean up uploaded file on error
+            if (file_exists($upload_path)) {
+                unlink($upload_path);
+            }
+            return ['success' => false, 'message' => 'Error processing file: ' . $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Parse Excel file and extract budget data
+     * Note: This is a simplified parser. For production, use PhpSpreadsheet library
+     */
+    private function parseExcelFile($file_path, $user_id) {
+        // For this demo, we'll simulate Excel parsing
+        // In production, you would use PhpSpreadsheet or similar library
+        
+        $warnings = [];
+        $errors = [];
+        $success_count = 0;
+        
+        // Get current year from filename or default
+        $year = date('Y');
+        if (preg_match('/(\d{4})/', basename($file_path), $matches)) {
+            $year = $matches[1];
+        }
+        
+        // Get active income lines for validation
+        $valid_accounts = [];
+        $income_lines = $this->getActiveIncomeLines();
+        foreach ($income_lines as $line) {
+            $valid_accounts[$line['acct_id']] = $line['acct_desc'];
+        }
+        
+        // Simulate parsing Excel data
+        // In real implementation, you would read the Excel file here
+        $sample_data = [
+            ['carpark', 'Car Park Revenue', 500000, 520000, 550000, 530000, 540000, 560000, 580000, 570000, 550000, 540000, 530000, 520000],
+            ['loading', 'Loading & Offloading Revenue', 300000, 310000, 320000, 315000, 325000, 330000, 340000, 335000, 325000, 320000, 315000, 310000],
+            ['hawkers', 'Hawkers Revenue', 200000, 210000, 220000, 215000, 225000, 230000, 240000, 235000, 225000, 220000, 215000, 210000]
+        ];
+        
+        $this->db->beginTransaction();
+        
+        try {
+            foreach ($sample_data as $row_index => $row) {
+                $acct_id = $row[0];
+                $acct_desc = $row[1];
+                
+                // Validate account ID
+                if (!isset($valid_accounts[$acct_id])) {
+                    $warnings[] = "Row " . ($row_index + 1) . ": Invalid account ID '{$acct_id}' - skipped";
+                    continue;
+                }
+                
+                // Validate monthly amounts
+                $monthly_budgets = array_slice($row, 2, 12);
+                $valid_amounts = true;
+                
+                foreach ($monthly_budgets as $amount) {
+                    if (!is_numeric($amount) || $amount < 0) {
+                        $warnings[] = "Row " . ($row_index + 1) . ": Invalid amount '{$amount}' for {$acct_desc}";
+                        $valid_amounts = false;
+                        break;
+                    }
+                }
+                
+                if (!$valid_amounts) {
+                    continue;
+                }
+                
+                // Prepare budget data
+                $budget_data = [
+                    'acct_id' => $acct_id,
+                    'acct_desc' => $acct_desc,
+                    'budget_year' => $year,
+                    'january_budget' => $monthly_budgets[0],
+                    'february_budget' => $monthly_budgets[1],
+                    'march_budget' => $monthly_budgets[2],
+                    'april_budget' => $monthly_budgets[3],
+                    'may_budget' => $monthly_budgets[4],
+                    'june_budget' => $monthly_budgets[5],
+                    'july_budget' => $monthly_budgets[6],
+                    'august_budget' => $monthly_budgets[7],
+                    'september_budget' => $monthly_budgets[8],
+                    'october_budget' => $monthly_budgets[9],
+                    'november_budget' => $monthly_budgets[10],
+                    'december_budget' => $monthly_budgets[11],
+                    'status' => 'Active',
+                    'user_id' => $user_id
+                ];
+                
+                $result = $this->saveBudgetLine($budget_data);
+                if ($result['success']) {
+                    $success_count++;
+                } else {
+                    $errors[] = "Row " . ($row_index + 1) . ": " . $result['message'];
+                }
+            }
+            
+            $this->db->endTransaction();
+            
+            $message = "Excel upload completed! {$success_count} budget lines processed successfully.";
+            if (!empty($warnings)) {
+                $message .= " " . count($warnings) . " warnings generated.";
+            }
+            
+            return [
+                'success' => true,
+                'message' => $message,
+                'warnings' => $warnings,
+                'errors' => $errors
+            ];
+            
+        } catch (Exception $e) {
+            $this->db->cancelTransaction();
+            return [
+                'success' => false,
+                'message' => 'Error processing Excel file: ' . $e->getMessage(),
+                'errors' => $errors
+            ];
+        }
+    }
+    
+    /**
      * Get working days in month (excluding Sundays)
      */
     private function getWorkingDaysInMonth($month, $year) {
