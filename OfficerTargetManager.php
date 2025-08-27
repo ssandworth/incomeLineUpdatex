@@ -389,28 +389,88 @@ class OfficerTargetManager {
     }
     
     /**
-     * Get officer ranking based on performance scores
+     * Get officer ranking with real-time calculations
      */
-    public function getOfficerRanking($month, $year) {
+    public function getOfficerRankingRealTime($month, $year) {
         $this->db->query("
             SELECT 
                 opt.officer_id,
                 opt.officer_name,
                 opt.department,
+                COUNT(opt.id) as assigned_lines,
                 SUM(opt.monthly_target) as total_target,
-                SUM(COALESCE(opt_track.achieved_amount, 0)) as total_achieved,
-                AVG(COALESCE(opt_track.achievement_percentage, 0)) as avg_achievement,
-                AVG(COALESCE(opt_track.performance_score, 0)) as overall_score,
-                COUNT(CASE WHEN opt_track.performance_grade IN ('A+', 'A') THEN 1 END) as excellent_lines,
-                COUNT(CASE WHEN opt_track.performance_grade IN ('B+', 'B') THEN 1 END) as good_lines,
-                COUNT(CASE WHEN opt_track.performance_grade IN ('C+', 'C', 'D', 'F') THEN 1 END) as poor_lines,
+                SUM(COALESCE(actual_data.achieved_amount, 0)) as total_achieved,
+                AVG(CASE 
+                    WHEN opt.monthly_target > 0 THEN 
+                        (COALESCE(actual_data.achieved_amount, 0) / opt.monthly_target) * 100
+                    ELSE 0
+                END) as avg_achievement,
+                AVG(CASE 
+                    WHEN opt.monthly_target = 0 THEN 0
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 100.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 90.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 80.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 70.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 60.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 50.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 40.00
+                    ELSE 30.00
+                END) as overall_score,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('A+', 'A') THEN 1 
+                END) as excellent_lines,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('B+', 'B') THEN 1 
+                END) as good_lines,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('C+', 'C', 'D', 'F') THEN 1 
+                END) as poor_lines,
                 COUNT(opt.id) as total_assigned_lines
             FROM officer_monthly_targets opt
-            LEFT JOIN officer_performance_tracking opt_track ON 
-                opt.officer_id = opt_track.officer_id 
-                AND opt.target_month = opt_track.performance_month 
-                AND opt.target_year = opt_track.performance_year
-                AND opt.acct_id = opt_track.acct_id
+            LEFT JOIN (
+                SELECT 
+                    t.remitting_id,
+                    t.credit_account,
+                    SUM(t.amount_paid) as achieved_amount,
+                    COUNT(DISTINCT t.date_of_payment) as working_days,
+                    COUNT(t.id) as total_transactions
+                FROM account_general_transaction_new t
+                WHERE MONTH(t.date_of_payment) = :month 
+                AND YEAR(t.date_of_payment) = :year
+                AND (t.approval_status = 'Approved' OR t.approval_status = '')
+                GROUP BY t.remitting_id, t.credit_account
+            ) actual_data ON opt.officer_id = actual_data.remitting_id 
+                AND opt.acct_id = actual_data.credit_account
             WHERE opt.target_month = :month 
             AND opt.target_year = :year
             AND opt.status = 'Active'
@@ -422,6 +482,14 @@ class OfficerTargetManager {
         $this->db->bind(':year', $year);
         
         return $this->db->resultSet();
+    }
+    
+    /**
+     * Get officer ranking based on performance scores
+     */
+    public function getOfficerRanking($month, $year) {
+        // Use real-time calculations instead of stored tracking data
+        return $this->getOfficerRankingRealTime($month, $year);
     }
 }
 ?>

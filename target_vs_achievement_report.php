@@ -19,7 +19,7 @@ $year = $_GET['year'] ?? date('Y');
 $month_name = date('F', mktime(0, 0, 0, $month, 1));
 
 // Get comprehensive data
-$officer_ranking = $target_manager->getOfficerRanking($month, $year);
+$officer_ranking = $target_manager->getOfficerRankingRealTime($month, $year);
 $department_comparison = $target_manager->getDepartmentPerformanceComparison($month, $year);
 
 // Calculate overall statistics

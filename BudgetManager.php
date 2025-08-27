@@ -345,33 +345,354 @@ class BudgetManager {
     }
     
     /**
-     * Get budget vs actual performance
+     * Get budget vs actual performance with real-time calculations
      */
-    public function getBudgetPerformance($year, $month = null) {
-        $month_condition = $month ? "AND bp.performance_month = :month" : "";
+    public function getBudgetPerformanceRealTime($year, $month = null) {
+        $month_condition = $month ? "AND :month = :month" : "";
         
+        // Get budget lines with real-time actual calculations
         $this->db->query("
             SELECT 
                 bl.acct_id,
                 bl.acct_desc,
-                bp.performance_month,
-                bp.budgeted_amount,
-                bp.actual_amount,
-                bp.variance_amount,
-                bp.variance_percentage,
-                bp.performance_status
+                bl.budget_year,
+                CASE 
+                    WHEN :month IS NOT NULL THEN
+                        CASE :month
+                            WHEN 1 THEN bl.january_budget
+                            WHEN 2 THEN bl.february_budget
+                            WHEN 3 THEN bl.march_budget
+                            WHEN 4 THEN bl.april_budget
+                            WHEN 5 THEN bl.may_budget
+                            WHEN 6 THEN bl.june_budget
+                            WHEN 7 THEN bl.july_budget
+                            WHEN 8 THEN bl.august_budget
+                            WHEN 9 THEN bl.september_budget
+                            WHEN 10 THEN bl.october_budget
+                            WHEN 11 THEN bl.november_budget
+                            WHEN 12 THEN bl.december_budget
+                        END
+                    ELSE bl.annual_budget
+                END as budgeted_amount,
+                COALESCE(actual_data.actual_amount, 0) as actual_amount,
+                (COALESCE(actual_data.actual_amount, 0) - 
+                    CASE 
+                        WHEN :month IS NOT NULL THEN
+                            CASE :month
+                                WHEN 1 THEN bl.january_budget
+                                WHEN 2 THEN bl.february_budget
+                                WHEN 3 THEN bl.march_budget
+                                WHEN 4 THEN bl.april_budget
+                                WHEN 5 THEN bl.may_budget
+                                WHEN 6 THEN bl.june_budget
+                                WHEN 7 THEN bl.july_budget
+                                WHEN 8 THEN bl.august_budget
+                                WHEN 9 THEN bl.september_budget
+                                WHEN 10 THEN bl.october_budget
+                                WHEN 11 THEN bl.november_budget
+                                WHEN 12 THEN bl.december_budget
+                            END
+                        ELSE bl.annual_budget
+                    END) as variance_amount,
+                CASE 
+                    WHEN (CASE 
+                        WHEN :month IS NOT NULL THEN
+                            CASE :month
+                                WHEN 1 THEN bl.january_budget
+                                WHEN 2 THEN bl.february_budget
+                                WHEN 3 THEN bl.march_budget
+                                WHEN 4 THEN bl.april_budget
+                                WHEN 5 THEN bl.may_budget
+                                WHEN 6 THEN bl.june_budget
+                                WHEN 7 THEN bl.july_budget
+                                WHEN 8 THEN bl.august_budget
+                                WHEN 9 THEN bl.september_budget
+                                WHEN 10 THEN bl.october_budget
+                                WHEN 11 THEN bl.november_budget
+                                WHEN 12 THEN bl.december_budget
+                            END
+                        ELSE bl.annual_budget
+                    END) > 0 THEN
+                        ((COALESCE(actual_data.actual_amount, 0) - 
+                            CASE 
+                                WHEN :month IS NOT NULL THEN
+                                    CASE :month
+                                        WHEN 1 THEN bl.january_budget
+                                        WHEN 2 THEN bl.february_budget
+                                        WHEN 3 THEN bl.march_budget
+                                        WHEN 4 THEN bl.april_budget
+                                        WHEN 5 THEN bl.may_budget
+                                        WHEN 6 THEN bl.june_budget
+                                        WHEN 7 THEN bl.july_budget
+                                        WHEN 8 THEN bl.august_budget
+                                        WHEN 9 THEN bl.september_budget
+                                        WHEN 10 THEN bl.october_budget
+                                        WHEN 11 THEN bl.november_budget
+                                        WHEN 12 THEN bl.december_budget
+                                    END
+                                ELSE bl.annual_budget
+                            END) / 
+                            CASE 
+                                WHEN :month IS NOT NULL THEN
+                                    CASE :month
+                                        WHEN 1 THEN bl.january_budget
+                                        WHEN 2 THEN bl.february_budget
+                                        WHEN 3 THEN bl.march_budget
+                                        WHEN 4 THEN bl.april_budget
+                                        WHEN 5 THEN bl.may_budget
+                                        WHEN 6 THEN bl.june_budget
+                                        WHEN 7 THEN bl.july_budget
+                                        WHEN 8 THEN bl.august_budget
+                                        WHEN 9 THEN bl.september_budget
+                                        WHEN 10 THEN bl.october_budget
+                                        WHEN 11 THEN bl.november_budget
+                                        WHEN 12 THEN bl.december_budget
+                                    END
+                                ELSE bl.annual_budget
+                            END) * 100
+                    ELSE 0
+                END as variance_percentage,
+                CASE 
+                    WHEN COALESCE(actual_data.actual_amount, 0) > 
+                        (CASE 
+                            WHEN :month IS NOT NULL THEN
+                                CASE :month
+                                    WHEN 1 THEN bl.january_budget
+                                    WHEN 2 THEN bl.february_budget
+                                    WHEN 3 THEN bl.march_budget
+                                    WHEN 4 THEN bl.april_budget
+                                    WHEN 5 THEN bl.may_budget
+                                    WHEN 6 THEN bl.june_budget
+                                    WHEN 7 THEN bl.july_budget
+                                    WHEN 8 THEN bl.august_budget
+                                    WHEN 9 THEN bl.september_budget
+                                    WHEN 10 THEN bl.october_budget
+                                    WHEN 11 THEN bl.november_budget
+                                    WHEN 12 THEN bl.december_budget
+                                END
+                            ELSE bl.annual_budget
+                        END) * 1.05 THEN 'Above Budget'
+                    WHEN COALESCE(actual_data.actual_amount, 0) >= 
+                        (CASE 
+                            WHEN :month IS NOT NULL THEN
+                                CASE :month
+                                    WHEN 1 THEN bl.january_budget
+                                    WHEN 2 THEN bl.february_budget
+                                    WHEN 3 THEN bl.march_budget
+                                    WHEN 4 THEN bl.april_budget
+                                    WHEN 5 THEN bl.may_budget
+                                    WHEN 6 THEN bl.june_budget
+                                    WHEN 7 THEN bl.july_budget
+                                    WHEN 8 THEN bl.august_budget
+                                    WHEN 9 THEN bl.september_budget
+                                    WHEN 10 THEN bl.october_budget
+                                    WHEN 11 THEN bl.november_budget
+                                    WHEN 12 THEN bl.december_budget
+                                END
+                            ELSE bl.annual_budget
+                        END) * 0.95 THEN 'On Budget'
+                    ELSE 'Below Budget'
+                END as performance_status,
+                :month as performance_month,
+                :year as performance_year
             FROM budget_lines bl
-            LEFT JOIN budget_performance bp ON bl.acct_id = bp.acct_id 
-                AND bl.budget_year = bp.performance_year
+            LEFT JOIN (
+                SELECT 
+                    t.credit_account,
+                    SUM(t.amount_paid) as actual_amount
+                FROM account_general_transaction_new t
+                WHERE YEAR(t.date_of_payment) = :year
+                " . ($month ? "AND MONTH(t.date_of_payment) = :month" : "") . "
+                AND (t.approval_status = 'Approved' OR t.approval_status = '')
+                GROUP BY t.credit_account
+            ) actual_data ON bl.acct_id = actual_data.credit_account
             WHERE bl.budget_year = :year
-            {$month_condition}
-            ORDER BY bl.acct_desc ASC, bp.performance_month ASC
+            AND bl.status = 'Active'
+            ORDER BY bl.acct_desc ASC
         ");
         
         $this->db->bind(':year', $year);
         if ($month) {
             $this->db->bind(':month', $month);
+        } else {
+            $this->db->bind(':month', null);
         }
+        
+        return $this->db->resultSet();
+    }
+    
+    /**
+     * Get officer performance with real-time calculations
+     */
+    public function getOfficerPerformanceRealTime($month, $year) {
+        $this->db->query("
+            SELECT 
+                opt.officer_id,
+                opt.officer_name,
+                opt.department,
+                opt.target_month,
+                opt.target_year,
+                opt.acct_id,
+                opt.acct_desc,
+                opt.monthly_target,
+                opt.daily_target,
+                COALESCE(actual_data.achieved_amount, 0) as achieved_amount,
+                CASE 
+                    WHEN opt.monthly_target > 0 THEN 
+                        (COALESCE(actual_data.achieved_amount, 0) / opt.monthly_target) * 100
+                    ELSE 0
+                END as achievement_percentage,
+                CASE 
+                    WHEN opt.monthly_target = 0 THEN 0
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 100.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 90.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 80.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 70.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 60.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 50.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 40.00
+                    ELSE 30.00
+                END as performance_score,
+                CASE 
+                    WHEN opt.monthly_target = 0 THEN 'F'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                    ELSE 'F'
+                END as performance_grade,
+                COALESCE(actual_data.working_days, 0) as working_days,
+                COALESCE(actual_data.total_transactions, 0) as total_transactions
+            FROM officer_monthly_targets opt
+            LEFT JOIN (
+                SELECT 
+                    t.remitting_id,
+                    t.credit_account,
+                    SUM(t.amount_paid) as achieved_amount,
+                    COUNT(DISTINCT t.date_of_payment) as working_days,
+                    COUNT(t.id) as total_transactions
+                FROM account_general_transaction_new t
+                WHERE MONTH(t.date_of_payment) = :month 
+                AND YEAR(t.date_of_payment) = :year
+                AND (t.approval_status = 'Approved' OR t.approval_status = '')
+                GROUP BY t.remitting_id, t.credit_account
+            ) actual_data ON opt.officer_id = actual_data.remitting_id 
+                AND opt.acct_id = actual_data.credit_account
+            WHERE opt.target_month = :month 
+            AND opt.target_year = :year
+            AND opt.status = 'Active'
+            ORDER BY opt.officer_name ASC, opt.acct_desc ASC
+        ");
+        
+        $this->db->bind(':month', $month);
+        $this->db->bind(':year', $year);
+        
+        return $this->db->resultSet();
+    }
+    
+    /**
+     * Get budget vs actual performance
+     */
+    public function getBudgetPerformance($year, $month = null) {
+        // Use real-time calculations instead of stored performance data
+        return $this->getBudgetPerformanceRealTime($year, $month);
+    }
+    
+    /**
+     * Get officer ranking with real-time calculations
+     */
+    public function getOfficerRankingRealTime($month, $year) {
+        $this->db->query("
+            SELECT 
+                opt.officer_id,
+                opt.officer_name,
+                opt.department,
+                COUNT(opt.id) as assigned_lines,
+                SUM(opt.monthly_target) as total_target,
+                SUM(COALESCE(actual_data.achieved_amount, 0)) as total_achieved,
+                AVG(CASE 
+                    WHEN opt.monthly_target > 0 THEN 
+                        (COALESCE(actual_data.achieved_amount, 0) / opt.monthly_target) * 100
+                    ELSE 0
+                END) as avg_achievement,
+                AVG(CASE 
+                    WHEN opt.monthly_target = 0 THEN 0
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 100.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 90.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 80.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 70.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 60.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 50.00
+                    WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 40.00
+                    ELSE 30.00
+                END) as overall_score,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('A+', 'A') THEN 1 
+                END) as excellent_count,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('B+', 'B') THEN 1 
+                END) as good_count,
+                COUNT(CASE 
+                    WHEN (CASE 
+                        WHEN opt.monthly_target = 0 THEN 'F'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.5 THEN 'A+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 1.2 THEN 'A'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target THEN 'B+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.8 THEN 'B'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.6 THEN 'C+'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.4 THEN 'C'
+                        WHEN COALESCE(actual_data.achieved_amount, 0) >= opt.monthly_target * 0.2 THEN 'D'
+                        ELSE 'F'
+                    END) IN ('C+', 'C', 'D', 'F') THEN 1 
+                END) as poor_count,
+                COUNT(opt.id) as total_assigned_lines
+            FROM officer_monthly_targets opt
+            LEFT JOIN (
+                SELECT 
+                    t.remitting_id,
+                    t.credit_account,
+                    SUM(t.amount_paid) as achieved_amount,
+                    COUNT(DISTINCT t.date_of_payment) as working_days,
+                    COUNT(t.id) as total_transactions
+                FROM account_general_transaction_new t
+                WHERE MONTH(t.date_of_payment) = :month 
+                AND YEAR(t.date_of_payment) = :year
+                AND (t.approval_status = 'Approved' OR t.approval_status = '')
+                GROUP BY t.remitting_id, t.credit_account
+            ) actual_data ON opt.officer_id = actual_data.remitting_id 
+                AND opt.acct_id = actual_data.credit_account
+            WHERE opt.target_month = :month 
+            AND opt.target_year = :year
+            AND opt.status = 'Active'
+            GROUP BY opt.officer_id, opt.officer_name, opt.department
+            ORDER BY overall_score DESC, avg_achievement DESC
+        ");
+        
+        $this->db->bind(':month', $month);
+        $this->db->bind(':year', $year);
         
         return $this->db->resultSet();
     }

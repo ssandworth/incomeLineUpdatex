@@ -26,7 +26,7 @@ $selected_year = $_GET['year'] ?? date('Y');
 $selected_month = $_GET['month'] ?? null;
 
 // Get performance data
-$performance_data = $manager->getBudgetPerformance($selected_year, $selected_month);
+$performance_data = $manager->getBudgetPerformanceRealTime($selected_year, $selected_month);
 $budget_lines = $manager->getBudgetLines($selected_year);
 
 // Calculate summary statistics
