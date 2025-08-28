@@ -52,8 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Get data for dropdowns
 $officers = $target_manager->getEligibleOfficers();
 $income_lines = $budget_manager->getActiveIncomeLines();
-$current_month = date('n');
-$current_year = date('Y');
+$current_month = $_GET['month'] ?? date('n');
+$current_year = $_GET['year'] ?? date('Y');
+$selected_officer = $_GET['officer_id'] ?? null;
+$month_name = date('F', mktime(0, 0, 0, $current_month, 1));
 ?>
 
 <!DOCTYPE html>
@@ -79,12 +81,60 @@ $current_year = date('Y');
                     <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                         <?php echo $staff['department']; ?>
                     </span>
+                    <span class="text-sm text-gray-700"><?php echo $month_name . ' ' . $current_year; ?></span>
                 </div>
             </div>
         </div>
     </nav>
 
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Period Selection -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Target Period Selection</h3>
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                    <select name="month" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m == $current_month ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                    <select name="year" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($y = date('Y'); $y <= date('Y') + 2; $y++): ?>
+                            <option value="<?php echo $y; ?>" <?php echo $y == $current_year ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Pre-select Officer</label>
+                    <select name="officer_id" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Choose Officer...</option>
+                        <?php foreach ($officers as $officer): ?>
+                            <option value="<?php echo $officer['user_id']; ?>" 
+                                    <?php echo $selected_officer == $officer['user_id'] ? 'selected' : ''; ?>>
+                                <?php echo $officer['full_name']; ?> - <?php echo $officer['department']; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-calendar mr-2"></i>Load Period
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Messages -->
         <?php if ($message): ?>
         <div class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">

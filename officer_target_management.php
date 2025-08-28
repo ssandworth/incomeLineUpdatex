@@ -72,6 +72,7 @@ if (isset($_GET['delete_target_id'])) {
 $selected_month = $_GET['month'] ?? date('n');
 $selected_year = $_GET['year'] ?? date('Y');
 $selected_officer = $_GET['officer_id'] ?? null;
+$month_name = date('F', mktime(0, 0, 0, $selected_month, 1));
 
 $officers = $target_manager->getEligibleOfficers();
 $income_lines = $budget_manager->getActiveIncomeLines();
@@ -159,6 +160,11 @@ $month_name = date('F', mktime(0, 0, 0, $selected_month, 1));
                             <button onclick="showTargetForm()" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
                                 <i class="fas fa-plus mr-2"></i>Add Target
                             </button>
+                            
+                            <a href="officer_target_setup.php?month=<?php echo $selected_month; ?>&year=<?php echo $selected_year; ?>" 
+                               class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
+                                <i class="fas fa-bullseye mr-2"></i>Target Setup
+                            </a>
                             
                             <form method="POST" class="inline">
                                 <input type="hidden" name="performance_month" value="<?php echo $selected_month; ?>">

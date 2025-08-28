@@ -109,8 +109,13 @@ $on_budget_count = count($performance_data) - $above_budget_count - $below_budge
                         </span>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <span class="text-xs text-gray-500">FY <?php echo $current_year; ?></span>
+                        <span class="text-xs text-gray-500">FY <?php echo $selected_year; ?></span>
                         <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <?php if ($selected_officer): ?>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                Officer Filter
+                            </span>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -118,18 +123,65 @@ $on_budget_count = count($performance_data) - $above_budget_count - $below_budge
     </nav>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filter Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Dashboard Filters</h3>
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                    <select name="month" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m == $selected_month ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                    <select name="year" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($y = date('Y') - 3; $y <= date('Y') + 2; $y++): ?>
+                            <option value="<?php echo $y; ?>" <?php echo $y == $selected_year ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Officer (Optional)</label>
+                    <select name="officer_id" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Officers</option>
+                        <?php foreach ($officers as $officer): ?>
+                            <option value="<?php echo $officer['user_id']; ?>" 
+                                    <?php echo $selected_officer == $officer['user_id'] ? 'selected' : ''; ?>>
+                                <?php echo $officer['full_name']; ?> - <?php echo $officer['department']; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-filter mr-2"></i>Apply Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Hero Section -->
         <div class="bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg p-8 mb-8 text-white">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
                 <div class="mb-6 lg:mb-0">
                     <h1 class="text-3xl font-bold mb-2">Budget Management Center</h1>
                     <p class="text-blue-100 text-lg">
-                        Comprehensive budget planning, target setting, and performance tracking for <?php echo $current_year; ?>
+                        Comprehensive budget planning, target setting, and performance tracking for <?php echo $selected_year; ?>
                     </p>
                     <div class="mt-4 flex items-center space-x-6">
                         <div class="flex items-center">
                             <i class="fas fa-calendar-alt mr-2"></i>
-                            <span class="text-sm">Current Period: <?php echo date('F Y'); ?></span>
+                            <span class="text-sm">Selected Period: <?php echo $month_name . ' ' . $selected_year; ?></span>
                         </div>
                         <div class="flex items-center">
                             <i class="fas fa-users mr-2"></i>
@@ -138,11 +190,11 @@ $on_budget_count = count($performance_data) - $above_budget_count - $below_budge
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-4xl font-bold mb-2">₦<?php echo number_format($total_budget); ?></div>
+                    <div class="text-4xl font-bold mb-2">₦<?php echo number_format(array_sum(array_column($budget_lines, 'annual_budget'))); ?></div>
                     <div class="text-blue-100">Annual Budget</div>
                     <div class="mt-2 flex items-center justify-end">
-                        <span class="text-sm <?php echo $budget_variance >= 0 ? 'text-green-300' : 'text-red-300'; ?>">
-                            <?php echo $budget_variance >= 0 ? '+' : ''; ?><?php echo number_format($budget_variance, 1); ?>% variance
+                        <span class="text-sm text-blue-200">
+                            Real-time Performance Data
                         </span>
                     </div>
                 </div>

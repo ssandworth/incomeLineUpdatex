@@ -133,7 +133,61 @@ if ($officer_id) {
                     </div>
                     
                     <!-- Filter Form -->
-                    <form method="GET" class="flex flex-col sm:flex-row gap-4">
+                    <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Officer</label>
+                            <select name="officer_id" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">All Officers</option>
+                                <optgroup label="Wealth Creation Officers">
+                                    <?php foreach ($wc_officers as $officer): ?>
+                                        <option value="<?php echo $officer['user_id']; ?>" 
+                                                <?php echo $selected_officer == $officer['user_id'] ? 'selected' : ''; ?>>
+                                            <?php echo $officer['full_name']; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                                <optgroup label="Other Officers">
+                                    <?php foreach ($other_officers as $officer): ?>
+                                        <option value="<?php echo $officer['id']; ?>-so" 
+                                                <?php echo $selected_officer == $officer['id'] . '-so' ? 'selected' : ''; ?>>
+                                            <?php echo $officer['full_name'] . ' - ' . $officer['department']; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                            <select name="month" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <?php for ($m = 1; $m <= 12; $m++): ?>
+                                    <option value="<?php echo $m; ?>" <?php echo $m == $selected_month ? 'selected' : ''; ?>>
+                                        <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                            <select name="year" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <?php for ($y = date('Y') - 3; $y <= date('Y') + 1; $y++): ?>
+                                    <option value="<?php echo $y; ?>" <?php echo $y == $selected_year ? 'selected' : ''; ?>>
+                                        <?php echo $y; ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i class="fas fa-search mr-2"></i>Analyze
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Legacy form for backward compatibility -->
+                    <form method="GET" class="hidden" id="legacyForm">
                         <select name="sstaff" class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                             <option value="">All Officers</option>
                             <optgroup label="Wealth Creation Officers">

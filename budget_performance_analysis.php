@@ -23,11 +23,53 @@ if (!$can_view) {
 }
 
 $selected_year = $_GET['year'] ?? date('Y');
-$selected_month = $_GET['month'] ?? null;
+$selected_month = $_GET['month'] ?? date('n');
+$selected_officer = $_GET['officer_id'] ?? null;
+$month_name = date('F', mktime(0, 0, 0, $selected_month, 1));
 
 // Get performance data
 $performance_data = $manager->getBudgetPerformanceRealTime($selected_year, $selected_month);
 $budget_lines = $manager->getBudgetLines($selected_year);
+
+// Get officers for filtering
+$manager->db->query("
+    SELECT DISTINCT user_id, full_name, department 
+    FROM staffs 
+    WHERE department IN ('Wealth Creation', 'Accounts', 'Leasing')
+    ORDER BY full_name ASC
+");
+$officers = $manager->db->resultSet();
+
+// Filter performance data by officer if selected
+if ($selected_officer) {
+    $filtered_performance = [];
+    foreach ($performance_data as $perf) {
+        // Get actual collections for this officer and account
+        $manager->db->query("
+            SELECT COALESCE(SUM(amount_paid), 0) as officer_actual
+            FROM account_general_transaction_new 
+            WHERE remitting_id = :officer_id
+            AND credit_account = :acct_id
+            AND MONTH(date_of_payment) = :month 
+            AND YEAR(date_of_payment) = :year
+            AND (approval_status = 'Approved' OR approval_status = '')
+        ");
+        $manager->db->bind(':officer_id', $selected_officer);
+        $manager->db->bind(':acct_id', $perf['acct_id']);
+        $manager->db->bind(':month', $selected_month);
+        $manager->db->bind(':year', $selected_year);
+        $officer_result = $manager->db->single();
+        
+        if ($officer_result['officer_actual'] > 0) {
+            $perf['actual_amount'] = $officer_result['officer_actual'];
+            $perf['variance_amount'] = $perf['actual_amount'] - $perf['budgeted_amount'];
+            $perf['variance_percentage'] = $perf['budgeted_amount'] > 0 ? 
+                (($perf['actual_amount'] - $perf['budgeted_amount']) / $perf['budgeted_amount']) * 100 : 0;
+            $filtered_performance[] = $perf;
+        }
+    }
+    $performance_data = $filtered_performance;
+}
 
 // Calculate summary statistics
 $total_budget = array_sum(array_column($budget_lines, 'annual_budget'));
@@ -74,13 +116,65 @@ $overall_variance = $total_budget > 0 ? (($total_actual - $total_budget) / $tota
                     <h1 class="text-xl font-bold text-gray-900">Budget Performance Analysis</h1>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <span class="text-sm text-gray-700"><?php echo $selected_year; ?></span>
+                    <span class="text-sm text-gray-700"><?php echo $month_name . ' ' . $selected_year; ?></span>
+                    <?php if ($selected_officer): ?>
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                            Officer Filter Active
+                        </span>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </nav>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filter Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Filters</h3>
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                    <select name="month" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m == $selected_month ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                    <select name="year" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <?php for ($y = date('Y') - 3; $y <= date('Y') + 2; $y++): ?>
+                            <option value="<?php echo $y; ?>" <?php echo $y == $selected_year ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Officer (Optional)</label>
+                    <select name="officer_id" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Officers</option>
+                        <?php foreach ($officers as $officer): ?>
+                            <option value="<?php echo $officer['user_id']; ?>" 
+                                    <?php echo $selected_officer == $officer['user_id'] ? 'selected' : ''; ?>>
+                                <?php echo $officer['full_name']; ?> - <?php echo $officer['department']; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-search mr-2"></i>Apply Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow-md p-6">
