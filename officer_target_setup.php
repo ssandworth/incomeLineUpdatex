@@ -211,6 +211,13 @@ $month_name = date('F', mktime(0, 0, 0, $current_month, 1));
                                 </option>
                             <?php endfor; ?>
                         </select>
+                        <script>
+                            // Set default values from URL parameters
+                            document.addEventListener('DOMContentLoaded', function() {
+                                document.getElementById('target_month').value = '<?php echo $current_month; ?>';
+                                document.getElementById('target_year').value = '<?php echo $current_year; ?>';
+                            });
+                        </script>
                     </div>
                 </div>
 
