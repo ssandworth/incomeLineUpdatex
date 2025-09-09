@@ -548,6 +548,12 @@ $performance_data = $manager->getBudgetPerformance($selected_year);
                     <i class="fas fa-crystal-ball mr-2"></i>
                     Budget Forecasting
                 </a>
+                
+                <a href="monthly_budget_performance.php?year=<?php echo $selected_year; ?>&month=<?php echo date('n'); ?>" 
+                   class="flex items-center justify-center px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors">
+                    <i class="fas fa-calendar-check mr-2"></i>
+                    Monthly Performance
+                </a>
             </div>
         </div>
     </div>

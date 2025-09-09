@@ -635,6 +635,32 @@ $on_budget_count = count($performance_data) - $above_budget_count - $below_budge
             </div>
         </div>
 
+        <!-- Monthly Performance Analysis -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Monthly Performance Analysis</h2>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Cumulative Performance Tracker</h3>
+                    <a href="monthly_budget_performance.php?year=<?php echo $current_year; ?>&month=<?php echo $current_month; ?>" 
+                       class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                        View Detailed Analysis →
+                    </a>
+                </div>
+                <p class="text-gray-600 mb-4">
+                    Track cumulative budget vs actual performance and officer achievements up to any selected month.
+                    Perfect for mid-year reviews and performance assessments.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <a href="monthly_budget_performance.php?year=<?php echo $current_year; ?>&month=<?php echo $m; ?>" 
+                           class="px-3 py-1 text-xs font-medium rounded-full <?php echo $m == $current_month ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'; ?> transition-colors">
+                            <?php echo date('M', mktime(0, 0, 0, $m, 1)); ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            </div>
+        </div>
+
         <!-- Current Month Performance Summary -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between mb-6">
